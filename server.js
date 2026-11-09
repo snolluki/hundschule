@@ -1,11 +1,12 @@
 'use strict';
 /*
- * Hundeschule-Werkstatt – Pair Programming und gemeinsames Greenfoot-Szenario (IF EF, UB Info 4)
+ * Hundeschule · Pair Programming – Online-Tool für IF EF (Do 12.11. und UB Fr 13.11.)
  *
  * Start lokal:  npm install  &&  npm start   ->  http://localhost:3000
- * Lernende:     /            Paar eintragen, Rolle sehen, Gruppe bilden, Quelltext abgeben,
- *                            gemeinsames Szenario (.gfar) herunterladen
- * Lehrkraft:    /lehrkraft   Überblick, Freigaben, Rollentausch, Sicherung
+ * Lernende:     /            Paar eintragen, Rolle sehen, Gruppe bilden (Do);
+ *                            Hindernis wählen, gestufte Hilfen, Quelltext hochladen,
+ *                            gemeinsames Szenario (.gfar) herunterladen (Fr)
+ * Lehrkraft:    /lehrkraft   Überblick, Freigaben, Arbeitsphase beenden, Rollentausch, Sicherung
  *
  * Umgebungsvariable (bei Render unter "Environment" setzen):
  *   LEHRER_PASSWORT   Passwort für die Lehrerseite (dringend empfohlen)
@@ -30,12 +31,14 @@ const LEBENSDAUER_MS = 10 * 24 * 60 * 60 * 1000;
 const MAX_PAARE_PRO_GRUPPE = 3;
 const MAX_CODE = 20000;
 
-/* Geräte (Klassen), die die Paare programmieren. Bild = Datei im Ordner images des Szenarios. */
+/* Hindernisse (Klassen), die die Paare programmieren. Bild = Datei im Ordner images des Szenarios.
+   info = kurze Angabe zum Umfang, damit die Paare ihre Wahl einschätzen können. */
 const KLASSEN = [
-  { name: 'Huerde', anzeige: 'Hürde', sterne: 1, bild: 'huerde.png' },
-  { name: 'Tunnel', anzeige: 'Tunnel', sterne: 2, bild: 'tunnel.png' },
-  { name: 'Slalom', anzeige: 'Slalom', sterne: 3, bild: 'slalom.png' },
+  { name: 'Huerde', anzeige: 'Hürde', bild: 'huerde.png', info: '2 Attribute · 4 Methoden' },
+  { name: 'Tunnel', anzeige: 'Tunnel', bild: 'tunnel.png', info: '3 Attribute · 3 Methoden' },
+  { name: 'Slalom', anzeige: 'Slalom', bild: 'slalom.png', info: '3 Attribute · 1 Methode mit Parameter' },
 ];
+const HILFE_THEMEN = ['anlegen', 'attribute', 'entscheidung', 'konstruktor', 'methoden', 'testen'];
 const KLASSE = Object.fromEntries(KLASSEN.map(k => [k.name, k]));
 
 const app = express();
@@ -49,10 +52,10 @@ const INSTANZ = crypto.randomBytes(6).toString('hex');
 
 function leererZustand() {
   return {
-    freigabe: { gruppen: true, geraete: false, abgabe: false },
+    freigabe: { gruppen: true, wahl: false, abgabe: false, download: false },
     abgabeBis: '',
     tausch: 0,                // wie oft die Rollen getauscht wurden
-    paare: {},                // id -> { id, namen[], rollen[], gruppe, klasse, code, codeZeit, seit }
+    paare: {},                // id -> { id, namen[], rollen[], gruppe, klasse, code, codeZeit, hilfen{}, seit }
     gruppen: {},              // id -> { id, name, seit }
     updatedAt: Date.now(),
   };
@@ -92,7 +95,7 @@ function oeffentlich() {
     klassen: KLASSEN,
     paare: Object.values(Z.paare).sort((a, b) => a.seit - b.seit).map(p => ({
       id: p.id, namen: p.namen, rollen: p.rollen, gruppe: p.gruppe, klasse: p.klasse,
-      abgegeben: !!p.code, codeZeit: p.codeZeit || null,
+      abgegeben: !!p.code, codeZeit: p.codeZeit || null, hilfen: p.hilfen || {},
     })),
     gruppen: Object.values(Z.gruppen).sort((a, b) => a.seit - b.seit).map(g => ({ id: g.id, name: g.name, fertig: gruppeFertig(g.id) })),
   };
@@ -134,7 +137,15 @@ function codePruefen(quelltext, klasse) {
   }
   const auf = (q.match(/{/g) || []).length, zu = (q.match(/}/g) || []).length;
   if (auf !== zu) return { fehler: `Es gibt ${auf} öffnende und ${zu} schließende geschweifte Klammern. Übersetzt in Greenfoot und gebt erst ab, wenn keine Fehlermeldung kommt.` };
-  return { code: /import\s+greenfoot/.test(q) ? q : 'import greenfoot.*;\n\n' + q };
+  const code = /import\s+greenfoot/.test(q) ? q : 'import greenfoot.*;\n\n' + q;
+  // Hinweise, die das Hochladen nicht verhindern (der Quelltext übersetzt trotzdem)
+  let hinweis = '';
+  if (new RegExp('void\\s+' + klasse + '\\s*\\(').test(q)) {
+    hinweis = `Vor „${klasse}(…)“ steht void. Dann ist es eine Methode und kein Konstruktor: Greenfoot fragt beim Erzeugen nichts ab. Beim Konstruktor steht vor dem Namen kein void.`;
+  } else if (!new RegExp('public\\s+' + klasse + '\\s*\\(').test(q)) {
+    hinweis = `Ich finde keinen Konstruktor „public ${klasse}(…)“. Er fehlt noch – ladet später noch einmal hoch, wenn er fertig ist.`;
+  }
+  return { code, hinweis };
 }
 
 /* ------------------------------------------------------------------ */
@@ -246,7 +257,8 @@ app.get('/szenario/:gid', (req, res) => {
   const p = Z.paare[String(req.query.p || '')];
   if (!lehrkraft) {
     if (!p || p.gruppe !== gid) return res.status(403).type('text/plain; charset=utf-8').send('Nur Paare dieser Gruppe können das Szenario herunterladen.');
-    if (!gruppeFertig(gid)) return res.status(409).type('text/plain; charset=utf-8').send('Es haben noch nicht alle Paare der Gruppe abgegeben.');
+    if (!Z.freigabe.download) return res.status(409).type('text/plain; charset=utf-8').send('Der Download ist noch nicht freigegeben.');
+    if (!paareDerGruppe(gid).some(x => x.code)) return res.status(409).type('text/plain; charset=utf-8').send('Noch hat kein Paar eurer Gruppe einen Quelltext hochgeladen.');
   }
   const { ordner, daten } = gfarBauen(gid);
   res.set('Content-Disposition', `attachment; filename="${ordner}.gfar"`).type('application/octet-stream').send(daten);
@@ -260,7 +272,7 @@ function paarAnlegen(namen) {
   const id = neueId();
   const rollen = mischen(namen.length === 3 ? ROLLEN.slice() : ROLLEN.slice(0, 2));
   if (namen.length === 3 && rollen[0] === 'Tester') { /* egal: alle drei Rollen kommen vor */ }
-  Z.paare[id] = { id, namen, rollen, gruppe: null, klasse: null, code: '', codeZeit: null, seit: Date.now() };
+  Z.paare[id] = { id, namen, rollen, gruppe: null, klasse: null, code: '', codeZeit: null, hilfen: {}, seit: Date.now() };
   return id;
 }
 
@@ -330,24 +342,36 @@ function schuelerAktion(socket, typ, d) {
       if (!paareDerGruppe(alt).length) delete Z.gruppen[alt];
       return {};
     }
-    case 'geraetWaehlen': {
-      if (!p || !p.gruppe) return { fehler: 'Ihr seid in keiner Gruppe.' };
-      if (!Z.freigabe.geraete) return { fehler: 'Die Gerätewahl ist noch nicht freigegeben.' };
+    case 'hindernisWaehlen': {
+      if (!p || !p.gruppe) return { fehler: 'Ihr seid in keiner Gruppe. Meldet euch bei eurer Lehrkraft.' };
+      if (!Z.freigabe.wahl) return { fehler: 'Die Wahl ist gerade nicht freigegeben.' };
       const k = String(d && d.klasse || '');
-      if (!KLASSE[k]) return { fehler: 'Dieses Gerät gibt es nicht.' };
-      if (p.code && p.klasse !== k) return { fehler: 'Ihr habt schon abgegeben. Fragt eure Lehrkraft, wenn ihr wechseln wollt.' };
-      if (paareDerGruppe(p.gruppe).some(x => x.id !== p.id && x.klasse === k)) return { fehler: 'Dieses Gerät hat schon ein anderes Paar eurer Gruppe.' };
+      if (!KLASSE[k]) return { fehler: 'Dieses Hindernis gibt es nicht.' };
+      if (p.code && p.klasse !== k) return { fehler: 'Ihr habt schon hochgeladen. Fragt eure Lehrkraft, wenn ihr wechseln wollt.' };
+      if (paareDerGruppe(p.gruppe).some(x => x.id !== p.id && x.klasse === k)) return { fehler: 'Dieses Hindernis hat schon ein anderes Paar eurer Gruppe.' };
+      if (p.klasse !== k) p.hilfen = {};
       p.klasse = k;
+      return {};
+    }
+    case 'hilfe': {
+      if (!p || !p.klasse) return { fehler: 'Wählt zuerst euer Hindernis.' };
+      const thema = String(d && d.thema || '');
+      const stufe = Number(d && d.stufe);
+      if (!HILFE_THEMEN.includes(thema) || ![1, 2].includes(stufe)) return { fehler: 'Diese Hilfe gibt es nicht.' };
+      const bisher = (p.hilfen || {})[thema] || 0;
+      if (stufe === 2 && bisher < 1) return { fehler: 'Schaut euch zuerst Hilfe 1 an.' };
+      p.hilfen = Object.assign({}, p.hilfen, { [thema]: Math.max(bisher, stufe) });
       return {};
     }
     case 'abgeben': {
       if (!p) return { fehler: 'Tragt euch zuerst als Paar ein.' };
-      if (!Z.freigabe.abgabe) return { fehler: 'Die Abgabe ist noch nicht freigegeben.' };
-      if (!p.klasse) return { fehler: 'Wählt zuerst euer Gerät.' };
+      if (Z.freigabe.download) return { fehler: 'Die Arbeitsphase ist beendet. Hochladen geht nicht mehr.' };
+      if (!Z.freigabe.abgabe) return { fehler: 'Das Hochladen ist noch nicht freigegeben.' };
+      if (!p.klasse) return { fehler: 'Wählt zuerst euer Hindernis.' };
       const r = codePruefen(d && d.quelltext, p.klasse);
       if (r.fehler) return { fehler: r.fehler };
       p.code = r.code; p.codeZeit = Date.now();
-      return {};
+      return { hinweis: r.hinweis || '' };
     }
     default:
       return { fehler: 'Unbekannte Aktion.' };
@@ -358,7 +382,7 @@ function ausSicherung(s) {
   if (!s || typeof s !== 'object') return null;
   const z = leererZustand();
   const f = s.freigabe || {};
-  z.freigabe = { gruppen: f.gruppen !== false, geraete: !!f.geraete, abgabe: !!f.abgabe };
+  z.freigabe = { gruppen: f.gruppen !== false, wahl: !!(f.wahl || f.geraete), abgabe: !!f.abgabe, download: !!f.download };
   z.abgabeBis = text(s.abgabeBis, 10);
   z.tausch = Number.isInteger(s.tausch) && s.tausch >= 0 ? s.tausch : 0;
   for (const g of Array.isArray(s.gruppen) ? s.gruppen : []) {
@@ -376,7 +400,11 @@ function ausSicherung(s) {
     const gruppe = p.gruppe && z.gruppen[p.gruppe] ? p.gruppe : null;
     const klasse = gruppe && KLASSE[p.klasse] ? p.klasse : null;
     const code = klasse && typeof p.code === 'string' ? p.code.slice(0, MAX_CODE + 40) : '';
-    z.paare[p.id] = { id: p.id, namen: r.namen, rollen, gruppe, klasse, code, codeZeit: code ? Number(p.codeZeit) || Date.now() : null, seit: Number(p.seit) || Date.now() };
+    const hilfen = {};
+    if (klasse && p.hilfen && typeof p.hilfen === 'object') {
+      for (const t of HILFE_THEMEN) if ([1, 2].includes(p.hilfen[t])) hilfen[t] = p.hilfen[t];
+    }
+    z.paare[p.id] = { id: p.id, namen: r.namen, rollen, gruppe, klasse, code, codeZeit: code ? Number(p.codeZeit) || Date.now() : null, hilfen, seit: Number(p.seit) || Date.now() };
   }
   return z;
 }
@@ -391,6 +419,9 @@ function lehrerAktion(d) {
     }
     case 'abgabeBis':
       Z.abgabeBis = text(d.zeit, 10);
+      return null;
+    case 'arbeitsphaseBeenden':
+      Z.freigabe.wahl = false; Z.freigabe.abgabe = false; Z.freigabe.download = true;
       return null;
     case 'rollenTauschen':
       rollenTauschen();
@@ -411,7 +442,7 @@ function lehrerAktion(d) {
       if (gid && paareDerGruppe(gid).filter(x => x.id !== p.id).length >= MAX_PAARE_PRO_GRUPPE) return 'Diese Gruppe hat schon drei Paare.';
       const alt = p.gruppe;
       p.gruppe = gid;
-      if (gid !== alt) { p.klasse = null; p.code = ''; p.codeZeit = null; }
+      if (gid !== alt) { p.klasse = null; p.code = ''; p.codeZeit = null; p.hilfen = {}; }
       if (alt && alt !== gid && !paareDerGruppe(alt).length) delete Z.gruppen[alt];
       return null;
     }
@@ -419,9 +450,9 @@ function lehrerAktion(d) {
       const p = Z.paare[d.pid];
       if (!p) return 'Paar nicht gefunden.';
       const k = d.klasse ? String(d.klasse) : null;
-      if (k && !KLASSE[k]) return 'Unbekanntes Gerät.';
-      if (k && p.gruppe && paareDerGruppe(p.gruppe).some(x => x.id !== p.id && x.klasse === k)) return 'Dieses Gerät hat schon ein anderes Paar der Gruppe.';
-      if (k !== p.klasse) { p.code = ''; p.codeZeit = null; }
+      if (k && !KLASSE[k]) return 'Unbekanntes Hindernis.';
+      if (k && p.gruppe && paareDerGruppe(p.gruppe).some(x => x.id !== p.id && x.klasse === k)) return 'Dieses Hindernis hat schon ein anderes Paar der Gruppe.';
+      if (k !== p.klasse) { p.code = ''; p.codeZeit = null; p.hilfen = {}; }
       p.klasse = k;
       return null;
     }
@@ -454,7 +485,7 @@ function lehrerAktion(d) {
     }
     case 'gruppeLoeschen': {
       if (!Z.gruppen[d.gid]) return null;
-      for (const p of paareDerGruppe(d.gid)) { p.gruppe = null; p.klasse = null; p.code = ''; p.codeZeit = null; }
+      for (const p of paareDerGruppe(d.gid)) { p.gruppe = null; p.klasse = null; p.code = ''; p.codeZeit = null; p.hilfen = {}; }
       delete Z.gruppen[d.gid];
       return null;
     }
@@ -522,7 +553,7 @@ setInterval(() => {
 }, 60 * 60 * 1000).unref();
 
 server.listen(PORT, () => {
-  console.log(`Hundeschule-Werkstatt läuft auf Port ${PORT}`);
+  console.log(`Hundeschule · Pair Programming läuft auf Port ${PORT}`);
   if (!PASSWORT) console.log('Hinweis: LEHRER_PASSWORT ist nicht gesetzt – die Lehrerseite ist ohne Passwort erreichbar.');
 });
 

@@ -1,7 +1,7 @@
 {
-  "name": "hundeschule-werkstatt",
+  "name": "hundeschule-pair-programming",
   "version": "1.0.0",
-  "description": "Hundeschule-Werkstatt – Pair Programming, Gruppen und gemeinsames Greenfoot-Szenario (IF EF)",
+  "description": "Hundeschule – Online-Tool für Pair Programming, Gruppen, Hilfen und gemeinsames Greenfoot-Szenario (IF EF)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

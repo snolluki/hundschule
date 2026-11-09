@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hundeschule-Werkstatt</title>
+<title>Hundeschule · Pair Programming</title>
 <style>
 :root{
   --bg:#f5f6f8; --panel:#ffffff; --text:#1f2937; --muted:#6b7280; --line:#e2e5ea;
@@ -78,6 +78,7 @@ label.f .input{margin-top:4px;font-weight:400}
 .geraet img{width:84px;height:84px;display:block;margin:0 auto 4px}
 .geraet b{display:block;font-size:1.1rem}
 .geraet .st{color:#ca8a04;letter-spacing:2px}
+.geraet .small{display:block}
 .geraet .wer{display:block;font-size:.85rem;color:var(--muted);min-height:1.2em}
 .geraet.mein{border-color:var(--ok);background:var(--ok-soft)}
 .geraet:disabled{cursor:not-allowed;opacity:.5}
@@ -121,6 +122,20 @@ a.btn,a.mini{text-decoration:none;display:inline-flex;align-items:center}
 .menu .pop{position:absolute;right:0;top:110%;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.15);padding:6px;display:grid;gap:4px;min-width:250px;z-index:30}
 .menu .pop button{text-align:left;border:0;background:none;padding:9px 10px;border-radius:8px;cursor:pointer}
 .menu .pop button:hover{background:var(--bg)}
+/* Hilfen */
+.hilfe{border-top:1px solid var(--line);padding:10px 0}
+.hilfe:first-of-type{border-top:0}
+.hilfe .kopf{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.hilfe .kopf b{margin-right:auto}
+.hilfe .txt{margin-top:8px;padding:10px 12px;border-radius:10px;background:var(--accent-soft);font-size:.97rem}
+.hilfe .txt.h2{background:var(--warn-soft)}
+.hilfe .txt code{background:rgba(255,255,255,.7);padding:0 3px;border-radius:4px}
+details.fm summary{cursor:pointer;font-weight:700;padding:8px 0}
+.fmtab{width:100%;border-collapse:collapse;font-size:.92rem}
+.fmtab td{border-top:1px solid var(--line);padding:6px 4px;vertical-align:top}
+.fmtab td:first-child{font-family:Consolas,"Courier New",monospace;width:42%}
+.symbol{width:28px;height:28px;vertical-align:middle;margin-right:4px}
+.phase{display:inline-block;padding:4px 12px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:700}
 /* Beameransicht */
 .nurbeamer{display:none}
 body.beamer .nurbeamer{display:inline}
@@ -167,7 +182,6 @@ function namenText(p) { return p.namen.join(' & '); }
 function rollenHTML(p) {
   return p.namen.map(function (n, i) { return esc(n) + ' <span class="rolle ' + p.rollen[i] + '">' + p.rollen[i] + '</span>'; }).join('<br>');
 }
-function sterne(n) { return new Array(n + 1).join('★'); }
 function klasseInfo(z, name) { return z.klassen.filter(function (k) { return k.name === name; })[0] || null; }
 function dialog(html) {
   var d = document.createElement('div');
@@ -178,8 +192,67 @@ function dialog(html) {
   return d;
 }
 function keinServer() {
-  $('#app').innerHTML = '<div class="big-msg"><h2>Kein Server</h2><p>Die Werkstatt funktioniert nur, wenn sie über den Server (Render) geöffnet wird.</p></div>';
+  $('#app').innerHTML = '<div class="big-msg"><h2>Kein Server</h2><p>Das Online-Tool funktioniert nur, wenn es über den Server (Render) geöffnet wird.</p></div>';
 }
+/* Gestufte Hilfen je Hindernis (Anhang EF-III_C_Artikulationsschema). Hilfe 2 erst nach Hilfe 1. */
+var THEMEN = [
+  { id: 'anlegen', titel: 'Klasse anlegen' },
+  { id: 'attribute', titel: 'Attribute' },
+  { id: 'entscheidung', titel: 'Konstruktor: Was gibt man beim Erzeugen an?' },
+  { id: 'konstruktor', titel: 'Konstruktor schreiben' },
+  { id: 'methoden', titel: 'Methoden' },
+  { id: 'testen', titel: 'Testen' }
+];
+var WORTE = {
+  Huerde: { jede: 'jeder Hürde', jedeNeu: 'jeder neuen Hürde', zwei: 'zwei Hürden', eine: 'eine Hürde' },
+  Tunnel: { jede: 'jedem Tunnel', jedeNeu: 'jedem neuen Tunnel', zwei: 'zwei Tunnel', eine: 'einen Tunnel' },
+  Slalom: { jede: 'jedem Slalom', jedeNeu: 'jedem neuen Slalom', zwei: 'zwei Slaloms', eine: 'einen Slalom' }
+};
+var ERSTES_ATTRIBUT = { Huerde: 'private int hoehe;', Tunnel: 'private int laenge;', Slalom: 'private String bezeichnung;' };
+var METHODEN_H2 = {
+  Huerde: 'Eine Zahl wird größer: <code>hoehe = hoehe + 10;</code><br>Ein Wahrheitswert wird gesetzt: <code>abgeworfen = true;</code><br>Jede Methode beginnt mit <code>public void</code>, zum Beispiel <code>public void abwerfen()</code>.',
+  Tunnel: 'Eine Zahl wird größer: <code>durchlaeufe = durchlaeufe + 1;</code><br>Ein Wahrheitswert wird gesetzt: <code>gebogen = true;</code><br>Jede Methode beginnt mit <code>public void</code>, zum Beispiel <code>public void biegen()</code>.',
+  Slalom: 'Eine Zahl wird größer: <code>anzahlStangen = anzahlStangen + 1;</code><br>Die Methode <code>abstandEinstellen</code> bekommt – wie <code>laufen(int pSchritte)</code> bei <code>Hund</code> – einen Parameter: <code>public void abstandEinstellen(int pAbstand)</code>. Darin steht <code>abstand = pAbstand;</code>'
+};
+function hilfeText(klasse, bild, thema, stufe) {
+  var w = WORTE[klasse];
+  var t = {
+    anlegen: [
+      'Klickt im Klassenfenster rechts mit der rechten Maustaste auf <code>Actor</code> – nicht auf <code>Hund</code> – und wählt „Neue Unterklasse …“.',
+      'Der Name heißt genau <code>' + klasse + '</code>: großer Anfangsbuchstabe, ohne Umlaut. Wählt bei den Szenariobildern <code>' + bild + '</code> und klickt auf OK.<br>Steht in eurer Klasse oben <code>extends Hund</code>? Dann Rechtsklick auf die Klasse → Entfernen und neu anlegen.'
+    ],
+    attribute: [
+      'Schaut in die Klasse <code>Hund</code>: Wo stehen dort die Attribute, und woraus besteht jede Zeile?',
+      'Aus dem Klassendiagramm: Text → <code>String</code>, Zahl → <code>int</code>, Wahrheitswert → <code>boolean</code>.<br>Das erste Attribut eurer Klasse lautet: <code>' + ERSTES_ATTRIBUT[klasse] + '</code>'
+    ],
+    entscheidung: [
+      'Lest die Beschreibung der Trainerin noch einmal. Welche Werte sind bei ' + w.jede + ' anders? Welche sind bei ' + w.jedeNeu + ' gleich?',
+      'Was bei jedem Objekt anders ist, kommt als Parameter in die Klammer des Konstruktors – wie <code>pName</code> bei <code>Hund</code>.<br>Was bei allen neuen Objekten gleich ist, bekommt im Konstruktor einen festen Wert – wie <code>haltung = "steht";</code>'
+    ],
+    konstruktor: [
+      'Vergleicht mit dem Konstruktor von <code>Hund</code>: Wie heißt er? Was steht in der runden Klammer? Was steht zwischen <code>{</code> und <code>}</code>?',
+      'So ist er aufgebaut: <code>public ' + klasse + '(Datentyp pName, …)</code> – ohne <code>void</code>. In der Klammer steht für jeden Parameter der Datentyp und der Name mit p davor.<br>Zwischen <code>{ }</code> bekommt jedes Attribut einen Startwert: <code>attribut = pParameter;</code> oder <code>attribut = fester Wert;</code>'
+    ],
+    methoden: [
+      'Schaut euch <code>sitzen()</code> in der Klasse <code>Hund</code> an: Welches Attribut verändert die Methode, und wie?',
+      METHODEN_H2[klasse]
+    ],
+    testen: [
+      'Übersetzt. Klickt dann mit der rechten Maustaste auf eure Klasse und wählt <code>new ' + klasse + '(…)</code>. Fragt Greenfoot genau nach den Werten, die bei ' + w.jede + ' anders sind?',
+      'Setzt ' + w.zwei + ' auf den Platz. Rechtsklick auf ' + w.eine + ' → Methode aufrufen, dann Rechtsklick → Inspizieren.<br>Steht ein Attribut auf 0 oder <code>false</code>, obwohl ihr beim Erzeugen einen Wert eingegeben habt? Dann fehlt im Konstruktor eine Zeile wie <code>attribut = pParameter;</code>'
+    ]
+  };
+  return t[thema][stufe - 1];
+}
+var FEHLERMELDUNGEN = [
+  ["';' expected", 'Am Ende der Anweisung fehlt ein Semikolon – oft in der Zeile davor.'],
+  ['cannot find symbol', 'Ein Name ist anders geschrieben als oben bei den Attributen (Groß- und Kleinschreibung, Umlaut) – oder <code>Int</code> statt <code>int</code>.'],
+  ['reached end of file while parsing', 'Eine geschweifte Klammer <code>}</code> fehlt, meist am Ende der Klasse oder einer Methode.'],
+  ['invalid method declaration; return type required', 'Vor dem Namen einer Methode fehlt <code>void</code> – oder der Konstruktor heißt nicht genau wie die Klasse.'],
+  ['not a statement', 'Eine Rechnung steht allein, z. B. <code>hoehe + 10;</code>. Das Ergebnis muss einem Attribut zugewiesen werden.'],
+  ['incompatible types: String cannot be converted to …', 'Ein Wert steht in Anführungszeichen, obwohl eine Zahl oder ein Wahrheitswert gemeint ist, z. B. <code>"false"</code> statt <code>false</code>.'],
+  ["'(' expected", 'Hinter dem Namen einer Methode fehlen die runden Klammern <code>()</code>.']
+];
 
 if (location.pathname.replace(/\/+$/, '') === '/lehrkraft') lehrkraftApp(); else schuelerApp();
 
@@ -219,7 +292,7 @@ function schuelerApp() {
   function paareIn(gid) { return z.paare.filter(function (p) { return p.gruppe === gid; }); }
 
   function kopf(p) {
-    return '<header class="top"><h1>Hundeschule-Werkstatt' + (p ? ' · ' + esc(namenText(p)) : '') + '</h1>' +
+    return '<header class="top"><h1>Hundeschule' + (p ? ' · ' + esc(namenText(p)) : '') + '</h1>' +
       (verbunden ? '' : '<span class="rolle Navigator">Verbindung wird hergestellt …</span>') +
       (p ? '<button class="linkbtn" id="abmelden">Das sind nicht wir</button>' : '') + '</header>';
   }
@@ -240,7 +313,7 @@ function schuelerApp() {
   /* ---------- Start: eintragen oder Paar wählen ---------- */
   function startAnsicht() {
     var h = '<div class="card"><h2>Neu hier? Tragt euch als Paar ein</h2>' +
-      '<p class="muted small">Nur Vornamen. Die Werkstatt lost aus, wer Driver und wer Navigator ist.</p>' +
+      '<p class="muted small">Nur Vornamen. Das Online-Tool lost aus, wer Driver und wer Navigator ist.</p>' +
       '<div class="row2"><label class="f">Name 1<input class="input" id="n0" data-name="0" maxlength="30" autocomplete="off" value="' + esc(formular.namen[0]) + '"></label>' +
       '<label class="f">Name 2<input class="input" id="n1" data-name="1" maxlength="30" autocomplete="off" value="' + esc(formular.namen[1]) + '"></label></div>' +
       (formular.trio ? '<label class="f">Name 3<input class="input" id="n2" data-name="2" maxlength="30" autocomplete="off" value="' + esc(formular.namen[2]) + '"></label>' : '') +
@@ -291,55 +364,80 @@ function schuelerApp() {
     }
 
     var ps = paareIn(g.id);
-    var abgegeben = ps.filter(function (q) { return q.abgegeben; }).length;
-    h += '<div class="card"><h2>Gruppe ' + esc(g.name) + '</h2><table class="gtab"><tr><th>Paar</th><th>Gerät</th><th>Abgabe</th></tr>' +
+    var freitag = z.freigabe.wahl || z.freigabe.abgabe || z.freigabe.download || ps.some(function (q) { return q.klasse; });
+
+    // Arbeitsphase beendet: gemeinsames Szenario zuerst
+    if (z.freigabe.download) h += downloadKarte(p, g, ps);
+
+    h += '<div class="card"><h2>Gruppe ' + esc(g.name) + '</h2><table class="gtab"><tr><th>Paar</th>' + (freitag ? '<th>Hindernis</th><th>Hochgeladen</th>' : '') + '</tr>' +
       ps.map(function (q) {
         var k = q.klasse ? klasseInfo(z, q.klasse) : null;
-        return '<tr class="' + (q.id === p.id ? 'ich' : '') + '"><td>' + rollenHTML(q) + '</td><td>' + (k ? esc(k.anzeige) + ' <span class="small" style="color:#ca8a04">' + sterne(k.sterne) + '</span>' : '<span class="offen">–</span>') +
-          '</td><td>' + (q.abgegeben ? '<span class="haken">✓</span> ' + uhr(q.codeZeit) : '<span class="offen">offen</span>') + '</td></tr>';
+        return '<tr class="' + (q.id === p.id ? 'ich' : '') + '"><td>' + rollenHTML(q) + '</td>' + (freitag ? '<td>' + (k ? '<img class="symbol" src="/bild/' + esc(k.bild) + '" alt="">' + esc(k.anzeige) : '<span class="offen">–</span>') +
+          '</td><td>' + (q.abgegeben ? '<span class="haken">✓</span> ' + uhr(q.codeZeit) : '<span class="offen">noch nicht</span>') + '</td>' : '') + '</tr>';
       }).join('') + '</table>' +
       (ps.length < 3 ? '<p class="small muted" style="margin-top:8px">Es fehlen noch ' + (3 - ps.length) + ' Paar(e).</p>' : '') +
       (z.freigabe.gruppen && !p.abgegeben ? '<div class="btns"><button class="linkbtn" id="verlassen">Gruppe verlassen</button></div>' : '') + '</div>';
 
-    // Gerät
-    if (z.freigabe.geraete || p.klasse) {
-      h += '<div class="card"><h2>Euer Gerät</h2>';
-      if (z.freigabe.geraete) h += '<p class="muted small">Jedes Paar der Gruppe programmiert ein anderes Gerät. Die Sterne zeigen, wie anspruchsvoll es ist.</p>';
+    // Hindernis wählen
+    if (z.freigabe.wahl || p.klasse) {
+      h += '<div class="card"><h2>Euer Hindernis</h2>';
+      if (z.freigabe.wahl && !p.klasse) h += '<p class="muted small">Wählt ein Hindernis. In eurer Gruppe programmiert jedes Paar ein anderes.</p>';
       h += '<div class="geraete">' + z.klassen.map(function (k) {
         var andere = ps.filter(function (q) { return q.id !== p.id && q.klasse === k.name; })[0];
         var mein = p.klasse === k.name;
-        var aus = !z.freigabe.geraete || !!andere || (p.abgegeben && !mein);
-        return '<button class="geraet' + (mein ? ' mein' : '') + '" data-geraet="' + k.name + '"' + (aus && !mein ? ' disabled' : '') + '>' +
-          '<img src="/bild/' + esc(k.bild) + '" alt=""><b>' + esc(k.anzeige) + '</b><span class="st">' + sterne(k.sterne) + '</span>' +
-          '<span class="wer">' + (mein ? 'euer Gerät' : andere ? esc(namenText(andere)) : '') + '</span></button>';
+        var aus = !z.freigabe.wahl || !!andere || (p.abgegeben && !mein);
+        return '<button class="geraet' + (mein ? ' mein' : '') + '" data-hindernis="' + k.name + '"' + (aus && !mein ? ' disabled' : '') + '>' +
+          '<img src="/bild/' + esc(k.bild) + '" alt=""><b>' + esc(k.anzeige) + '</b><span class="small muted">' + esc(k.info) + '</span>' +
+          '<span class="wer">' + (mein ? 'euer Hindernis' : andere ? esc(namenText(andere)) : '') + '</span></button>';
       }).join('') + '</div>';
-      if (p.klasse) h += '<p class="small" style="margin-top:10px">Eure Klasse heißt genau <code>' + esc(p.klasse) + '</code> (ohne Umlaute).</p>';
+      if (p.klasse) {
+        var kk = klasseInfo(z, p.klasse);
+        h += '<p style="margin-top:12px"><b>Navigator:</b> Holt das Aufgabenblatt mit diesem Symbol aus der Mitte.</p>' +
+          '<p class="small">Eure Klasse heißt genau <code>' + esc(p.klasse) + '</code>, das Bild ist <code>' + esc(kk ? kk.bild : '') + '</code>.</p>';
+      }
       h += '</div>';
     }
 
-    // Abgabe
-    if (p.klasse) {
-      h += '<div class="card"><h2>Quelltext abgeben</h2>';
+    // Hilfen und Hochladen nur während der Arbeitsphase
+    if (p.klasse && !z.freigabe.download) {
+      h += hilfenKarte(p);
+      h += '<div class="card"><h2>Quelltext hochladen</h2>';
       if (!z.freigabe.abgabe) {
-        h += '<p class="muted">Die Abgabe ist noch nicht freigegeben.</p>';
+        h += '<p class="muted">Das Hochladen ist noch nicht freigegeben.</p>';
       } else {
-        h += (z.abgabeBis ? '<p class="note">Abgabe bis ' + esc(z.abgabeBis) + ' Uhr</p>' : '') +
-          '<p class="small muted">Erst abgeben, wenn eure Klasse in Greenfoot ohne Fehlermeldung übersetzt.</p>' +
-          (p.abgegeben ? '<p class="okbox">Abgegeben um ' + uhr(p.codeZeit) + ' Uhr. Ihr könnt jederzeit eine neue Fassung hochladen.</p>' : '');
+        h += '<p class="small muted">Erst hochladen, wenn eure Klasse in Greenfoot ohne Fehlermeldung übersetzt. Ihr könnt jederzeit eine neue Fassung hochladen, bis die Arbeitsphase endet.</p>' +
+          (p.abgegeben ? '<p class="okbox">Hochgeladen um ' + uhr(p.codeZeit) + ' Uhr.</p>' : '');
       }
-      h += '<div class="btns"><button class="btn ' + (p.abgegeben ? '' : 'primary') + '" id="hochladen"' + (z.freigabe.abgabe ? '' : ' disabled') + '>Quelltext hochladen</button></div></div>';
+      h += '<div class="btns"><button class="btn ' + (p.abgegeben ? '' : 'primary') + '" id="hochladen"' + (z.freigabe.abgabe ? '' : ' disabled') + '>' + (p.abgegeben ? 'Neue Fassung hochladen' : 'Quelltext hochladen') + '</button></div></div>';
     }
+    return h;
+  }
 
-    // Gemeinsames Szenario
-    if (p.klasse || abgegeben) {
-      var fertig = ps.length > 0 && abgegeben === ps.length;
-      h += '<div class="card"><h2>Gemeinsames Szenario</h2>' +
-        '<p>' + abgegeben + ' von ' + ps.length + ' Paaren haben abgegeben.</p>' +
-        (fertig ? '<p class="small muted">Speichert die Datei, öffnet sie in Greenfoot (Szenario → Öffnen) und klickt auf Übersetzen. Darin sind die Klassen aller Paare eurer Gruppe.</p>'
-          : '<p class="small muted">Sobald alle Paare eurer Gruppe abgegeben haben, könnt ihr das Szenario herunterladen.</p>') +
-        '<div class="btns"><a class="btn ok' + (fertig ? '' : ' hidden') + '" href="/szenario/' + g.id + '?p=' + p.id + '" download>Szenario herunterladen (.gfar)</a>' +
-        (fertig ? '' : '<button class="btn" disabled>Szenario herunterladen (.gfar)</button>') + '</div></div>';
-    }
+  function hilfenKarte(p) {
+    var k = klasseInfo(z, p.klasse);
+    var stand = p.hilfen || {};
+    var h = '<div class="card"><h2>Hilfen</h2><p class="small muted">Erst selbst überlegen, dann Hilfe 1. Hilfe 2 gibt es erst, wenn ihr Hilfe 1 gelesen habt.</p>';
+    h += THEMEN.map(function (t) {
+      var st = stand[t.id] || 0;
+      return '<div class="hilfe"><div class="kopf"><b>' + esc(t.titel) + '</b>' +
+        '<button class="mini" data-hilfe="' + t.id + '" data-stufe="1"' + (st >= 1 ? ' disabled' : '') + '>Hilfe 1</button>' +
+        '<button class="mini" data-hilfe="' + t.id + '" data-stufe="2"' + (st >= 1 && st < 2 ? '' : ' disabled') + '>Hilfe 2</button></div>' +
+        (st >= 1 ? '<div class="txt">' + hilfeText(p.klasse, k ? k.bild : '', t.id, 1) + '</div>' : '') +
+        (st >= 2 ? '<div class="txt h2">' + hilfeText(p.klasse, k ? k.bild : '', t.id, 2) + '</div>' : '') + '</div>';
+    }).join('');
+    h += '<details class="fm"><summary>Fehlermeldungen in Greenfoot</summary><table class="fmtab">' +
+      FEHLERMELDUNGEN.map(function (f) { return '<tr><td>' + esc(f[0]) + '</td><td>' + f[1] + '</td></tr>'; }).join('') + '</table></details></div>';
+    return h;
+  }
+
+  function downloadKarte(p, g, ps) {
+    var anzahl = ps.filter(function (q) { return q.abgegeben; }).length;
+    var h = '<div class="card"><h2>Die Arbeitsphase ist beendet</h2>';
+    if (!anzahl) return h + '<p class="note">Aus eurer Gruppe hat niemand einen Quelltext hochgeladen. Meldet euch bei eurer Lehrkraft.</p></div>';
+    h += '<p>Im Szenario eurer Gruppe sind die Klassen von ' + anzahl + ' von ' + ps.length + ' Paaren.</p>' +
+      '<ol class="small" style="margin:0 0 10px;padding-left:1.3em"><li>Einer von euch lädt das Szenario herunter.</li><li>Datei in Greenfoot öffnen (Szenario → Öffnen) und auf Übersetzen klicken.</li>' +
+      '<li>Setzt euch als Gruppe an diesen Rechner. Was ihr dann macht, steht am Beamer.</li></ol>' +
+      '<div class="btns"><a class="btn ok" href="/szenario/' + g.id + '?p=' + p.id + '" download>Szenario herunterladen (.gfar)</a></div></div>';
     return h;
   }
 
@@ -370,8 +468,11 @@ function schuelerApp() {
     $$('[data-beitreten]').forEach(function (b) { b.addEventListener('click', function () { aktion('gruppeBeitreten', { gid: b.getAttribute('data-beitreten') }); }); });
     var vl = $('#verlassen');
     if (vl) vl.addEventListener('click', function () { if (confirm('Wollt ihr die Gruppe wirklich verlassen?')) aktion('gruppeVerlassen'); });
-    $$('[data-geraet]').forEach(function (b) {
-      b.addEventListener('click', function () { if (z.freigabe.geraete && p.klasse !== b.getAttribute('data-geraet')) aktion('geraetWaehlen', { klasse: b.getAttribute('data-geraet') }); });
+    $$('[data-hindernis]').forEach(function (b) {
+      b.addEventListener('click', function () { if (z.freigabe.wahl && p.klasse !== b.getAttribute('data-hindernis')) aktion('hindernisWaehlen', { klasse: b.getAttribute('data-hindernis') }); });
+    });
+    $$('[data-hilfe]').forEach(function (b) {
+      b.addEventListener('click', function () { aktion('hilfe', { thema: b.getAttribute('data-hilfe'), stufe: +b.getAttribute('data-stufe') }); });
     });
     var hl = $('#hochladen');
     if (hl) hl.addEventListener('click', function () { hochladen(p); });
@@ -399,12 +500,18 @@ function schuelerApp() {
     var d = dialog('<h2>Quelltext der Klasse ' + esc(p.klasse) + ' hochladen</h2>' +
       '<p class="small muted">Im Greenfoot-Editor: Strg + A (alles markieren), Strg + C (kopieren). Hier: Strg + V (einfügen).</p>' +
       '<textarea id="qt" spellcheck="false" placeholder="public class ' + esc(p.klasse) + ' extends Actor ..."></textarea>' +
-      '<div id="qfehler"></div><div class="btns"><button class="btn primary" id="qok">Abgeben</button><button class="btn" id="qab">Abbrechen</button></div>');
+      '<div id="qfehler"></div><div class="btns"><button class="btn primary" id="qok">Hochladen</button><button class="btn" id="qab">Abbrechen</button></div>');
     $('#qt', d).focus();
     $('#qab', d).addEventListener('click', function () { d.remove(); });
     $('#qok', d).addEventListener('click', function () {
       socket.emit('s:aktion', { typ: 'abgeben', pid: pid, quelltext: $('#qt', d).value }, function (r) {
-        if (r && r.ok) { d.remove(); toast('Abgegeben. Danke!'); return; }
+        if (r && r.ok && r.hinweis) {
+          d.querySelector('.card').innerHTML = '<h2>Hochgeladen</h2><p class="okbox">Euer Quelltext ist hochgeladen.</p><p class="note">Hinweis: ' + esc(r.hinweis) + '</p>' +
+            '<div class="btns"><button class="btn primary" id="qzu">OK</button></div>';
+          $('#qzu', d).addEventListener('click', function () { d.remove(); });
+          return;
+        }
+        if (r && r.ok) { d.remove(); toast('Hochgeladen.'); return; }
         $('#qfehler', d).innerHTML = '<div class="fehler">' + esc((r && r.fehler) || 'Das hat nicht geklappt.') + '</div>';
       });
     });
@@ -435,7 +542,7 @@ function lehrkraftApp() {
     return {
       freigabe: s.freigabe, abgabeBis: s.abgabeBis, tausch: s.tausch,
       gruppen: s.gruppen.map(function (g) { return { id: g.id, name: g.name, seit: g.seit }; }),
-      paare: s.paare.map(function (p) { return { id: p.id, namen: p.namen, rollen: p.rollen, gruppe: p.gruppe, klasse: p.klasse, code: p.code, codeZeit: p.codeZeit, seit: p.seit }; })
+      paare: s.paare.map(function (p) { return { id: p.id, namen: p.namen, rollen: p.rollen, gruppe: p.gruppe, klasse: p.klasse, code: p.code, codeZeit: p.codeZeit, hilfen: p.hilfen || {}, seit: p.seit }; })
     };
   }
 
@@ -456,7 +563,7 @@ function lehrkraftApp() {
     });
   }
   function loginZeigen() {
-    app.innerHTML = '<div class="wrap" style="max-width:480px"><div class="card"><h2>Hundeschule-Werkstatt · Lehrkraft</h2>' +
+    app.innerHTML = '<div class="wrap" style="max-width:480px"><div class="card"><h2>Hundeschule · Lehrkraft</h2>' +
       '<label class="f">Passwort<input class="input" type="password" id="pw" autocomplete="current-password"></label>' +
       '<div class="btns"><button class="btn primary" id="login">Anmelden</button></div>' +
       '<p class="small muted" style="margin-top:12px">Der kostenlose Server bei Render braucht nach einer Pause bis zu einer Minute zum Aufwachen.</p></div></div>';
@@ -484,7 +591,9 @@ function lehrkraftApp() {
     var schalter = function (was, label) {
       return '<span class="schalter' + (z.freigabe[was] ? ' an' : '') + '" data-schalter="' + was + '"><span class="pkt"></span>' + label + '</span>';
     };
-    var h = '<header class="top"><h1>Hundeschule-Werkstatt · Lehrkraft</h1>' +
+    var phase = z.freigabe.download ? 'Arbeitsphase beendet – Download offen' : z.freigabe.abgabe ? 'Arbeitsphase – Hochladen offen' :
+      z.freigabe.wahl ? 'Hindernisse wählen' : z.freigabe.gruppen ? 'Paare und Gruppen eintragen' : '';
+    var h = '<header class="top"><h1>Hundeschule · Lehrkraft</h1>' +
       '<button class="btn" id="beamer">' + (document.body.classList.contains('beamer') ? 'Verwaltung' : 'Beameransicht') + '</button>' +
       '<div class="menu nurlk"><button class="btn" id="menuBtn">☰ Mehr</button>' + (menuOffen ?
         '<div class="pop"><button id="mDown">Sicherung herunterladen (.json)</button><button id="mUp">Sicherung laden …</button>' +
@@ -492,12 +601,13 @@ function lehrkraftApp() {
       '</div></header><div class="wrap">';
 
     h += '<div class="card"><div class="small muted">Adresse für die Schülerinnen und Schüler</div><div class="url">' + esc(url) + '</div>' +
-      '<div class="lkbar nurlk" style="margin-top:12px">' + schalter('gruppen', 'Gruppenwahl offen') + schalter('geraete', 'Gerätewahl offen') + schalter('abgabe', 'Abgabe offen') +
-      '<label class="schalter" style="cursor:default">Abgabe bis <input class="input" id="bis" style="width:90px;padding:4px 8px" placeholder="10:27" value="' + esc(z.abgabeBis) + '"></label>' +
+      (phase ? '<div style="margin-top:8px"><span class="phase">' + esc(phase) + '</span></div>' : '') +
+      '<div class="lkbar nurlk" style="margin-top:12px">' + schalter('gruppen', 'Gruppenwahl offen') + schalter('wahl', 'Hinderniswahl offen') + schalter('abgabe', 'Hochladen offen') + schalter('download', 'Download offen') +
+      (z.freigabe.download ? '' : '<button class="btn primary" id="ende">Arbeitsphase beenden</button>') +
       '<button class="btn" id="tausch">Rollen tauschen</button>' +
       '<span class="small muted">' + (z.tausch ? 'Rollen ' + z.tausch + '× getauscht' : 'Rollen noch nicht getauscht') + '</span></div>' +
       '<div class="stat" style="margin-top:10px"><span><b>' + z.paare.length + '</b> Paare</span><span><b>' + z.gruppen.length + '</b> Gruppen</span>' +
-      '<span><b>' + ohne.length + '</b> ohne Gruppe</span><span><b>' + abg + '</b> von ' + z.paare.length + ' abgegeben</span></div></div>';
+      '<span><b>' + ohne.length + '</b> ohne Gruppe</span><span><b>' + z.paare.filter(function (p) { return p.klasse; }).length + '</b> mit Hindernis</span><span><b>' + abg + '</b> von ' + z.paare.length + ' hochgeladen</span></div></div>';
 
     h += '<div class="gcards">' + z.gruppen.map(gruppenKarte).join('') + '</div>';
     if (ohne.length) {
@@ -515,7 +625,7 @@ function lehrkraftApp() {
     var pz = ps.length ? Math.round(abg / ps.length * 100) : 0;
     return '<div class="card gcard"><h3><span class="gname" data-umbenennen="' + g.id + '" title="Umbenennen">' + esc(g.name) + '</span>' +
       '<span class="small muted">' + ps.length + ' von 3 Paaren</span></h3>' +
-      '<div class="small muted">' + abg + ' von ' + ps.length + ' abgegeben</div><div class="fortschritt"><span style="width:' + pz + '%"></span></div>' +
+      '<div class="small muted">' + abg + ' von ' + ps.length + ' hochgeladen</div><div class="fortschritt"><span style="width:' + pz + '%"></span></div>' +
       '<div>' + ps.map(function (p) { return paarZeile(p, g); }).join('') + '</div>' +
       '<div class="btns nurlk"><a class="mini" href="/szenario/' + g.id + '?t=' + token + '" download>.gfar herunterladen</a>' +
       '<button class="mini bad" data-gloeschen="' + g.id + '">Gruppe auflösen</button></div></div>';
@@ -526,14 +636,16 @@ function lehrkraftApp() {
     var gopts = '<option value="">– ohne Gruppe –</option>' + z.gruppen.map(function (x) {
       return '<option value="' + x.id + '"' + (x.id === p.gruppe ? ' selected' : '') + '>' + esc(x.name) + '</option>';
     }).join('');
-    var kopts = '<option value="">– Gerät –</option>' + z.klassen.map(function (x) {
-      return '<option value="' + x.name + '"' + (x.name === p.klasse ? ' selected' : '') + '>' + esc(x.anzeige) + ' ' + sterne(x.sterne) + '</option>';
+    var kopts = '<option value="">– Hindernis –</option>' + z.klassen.map(function (x) {
+      return '<option value="' + x.name + '"' + (x.name === p.klasse ? ' selected' : '') + '>' + esc(x.anzeige) + '</option>';
     }).join('');
-    var status = p.code ? '<button class="mini" data-code="' + p.id + '"><span class="haken">✓</span> ' + uhr(p.codeZeit) + '</button>' : '<span class="offen small">offen</span>';
+    var hz = 0; Object.keys(p.hilfen || {}).forEach(function (t) { hz += p.hilfen[t]; });
+    var status = p.code ? '<button class="mini" data-code="' + p.id + '"><span class="haken">✓</span> ' + uhr(p.codeZeit) + '</button>' : '<span class="offen small">nicht hochgeladen</span>';
     var namen = p.namen.map(function (n, i) { return '<span class="pn">' + esc(n) + ' <span class="rolle ' + p.rollen[i] + '">' + p.rollen[i] + '</span></span>'; }).join('');
     return '<div class="prow"><div class="pnamen">' + namen + '</div><div class="pctl">' +
       (g ? '<select class="nurlk" data-klasse="' + p.id + '">' + kopts + '</select>' +
-        '<span class="nurbeamer">' + (k ? esc(k.anzeige) + ' <span style="color:#ca8a04">' + sterne(k.sterne) + '</span>' : '') + '</span>' + status : '') +
+        '<span class="nurbeamer">' + (k ? '<img class="symbol" src="/bild/' + esc(k.bild) + '" alt="">' + esc(k.anzeige) : '') + '</span>' + status +
+        (hz ? '<span class="nurlk small muted" title="geöffnete Hilfen (Hilfe 1 zählt 1, Hilfe 2 zählt 2)">Hilfen: ' + hz + '</span>' : '') : '') +
       '<span class="nurlk rechts"><select data-gruppe="' + p.id + '" title="Gruppe">' + gopts + '</select>' +
       '<button class="mini" data-rollen="' + p.id + '" title="Rollen neu auslosen">🎲</button>' +
       '<button class="mini bad" data-ploeschen="' + p.id + '" title="Paar löschen">✕</button></span></div></div>';
@@ -560,8 +672,10 @@ function lehrkraftApp() {
     $$('[data-schalter]').forEach(function (el) {
       el.addEventListener('click', function () { var w = el.getAttribute('data-schalter'); aktion({ typ: 'freigabe', was: w, an: !z.freigabe[w] }); });
     });
-    var bis = $('#bis');
-    if (bis) bis.addEventListener('change', function () { aktion({ typ: 'abgabeBis', zeit: bis.value }); });
+    var ende = $('#ende');
+    if (ende) ende.addEventListener('click', function () {
+      if (confirm('Arbeitsphase beenden? Hochladen und Hinderniswahl werden geschlossen, die Gruppen können ihr Szenario herunterladen.')) aktion({ typ: 'arbeitsphaseBeenden' });
+    });
     var t = $('#tausch');
     if (t) t.addEventListener('click', function () {
       if (confirm('Rollen bei allen Paaren tauschen? Navigator wird Driver, Driver wird Navigator (im Trio rotieren die drei Rollen).')) aktion({ typ: 'rollenTauschen' });
@@ -587,7 +701,7 @@ function lehrkraftApp() {
     $$('[data-klasse]').forEach(function (s) {
       s.addEventListener('change', function () {
         var p = z.paare.filter(function (x) { return x.id === s.getAttribute('data-klasse'); })[0];
-        if (p && p.code && !confirm('Das Paar hat schon abgegeben. Beim Wechsel des Geräts wird die Abgabe gelöscht. Fortfahren?')) return zeichnen();
+        if (p && p.code && !confirm('Das Paar hat schon abgegeben. Beim Wechsel des Hindernisses wird die Abgabe gelöscht. Fortfahren?')) return zeichnen();
         aktion({ typ: 'paarKlasse', pid: s.getAttribute('data-klasse'), klasse: s.value || null });
       });
     });
@@ -615,7 +729,7 @@ function lehrkraftApp() {
     var a = document.createElement('a');
     var d = new Date();
     a.href = URL.createObjectURL(blob);
-    a.download = 'Werkstatt_' + d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2) + '_' + ('0' + d.getHours()).slice(-2) + ('0' + d.getMinutes()).slice(-2) + '.json';
+    a.download = 'Hundeschule_' + d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2) + '_' + ('0' + d.getHours()).slice(-2) + ('0' + d.getMinutes()).slice(-2) + '.json';
     document.body.appendChild(a); a.click(); a.remove();
   }
   function hochladen() {
