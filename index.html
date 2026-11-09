@@ -127,6 +127,7 @@ a.btn,a.mini{text-decoration:none;display:inline-flex;align-items:center}
 .hilfe:first-of-type{border-top:0}
 .hilfe .kopf{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .hilfe .kopf b{margin-right:auto}
+.hilfe .kopf span{flex:1;margin-right:auto}
 .hilfe .txt{margin-top:8px;padding:10px 12px;border-radius:10px;background:var(--accent-soft);font-size:.97rem}
 .hilfe .txt.h2{background:var(--warn-soft)}
 .hilfe .txt code{background:rgba(255,255,255,.7);padding:0 3px;border-radius:4px}
@@ -194,52 +195,50 @@ function dialog(html) {
 function keinServer() {
   $('#app').innerHTML = '<div class="big-msg"><h2>Kein Server</h2><p>Das Online-Tool funktioniert nur, wenn es über den Server (Render) geöffnet wird.</p></div>';
 }
-/* Gestufte Hilfen je Hindernis (Anhang EF-III_C_Artikulationsschema). Hilfe 2 erst nach Hilfe 1. */
+/* Hilfen: drei Bauteile der Klasse (gestuft) und drei typische Probleme (eine Stufe).
+   Was schon auf dem Aufgabenblatt steht (Klasse anlegen, Hund als Vorbild, Fertig-Kriterien), steht hier nicht. */
 var THEMEN = [
-  { id: 'anlegen', titel: 'Klasse anlegen' },
-  { id: 'attribute', titel: 'Attribute' },
-  { id: 'entscheidung', titel: 'Konstruktor: Was gibt man beim Erzeugen an?' },
-  { id: 'konstruktor', titel: 'Konstruktor schreiben' },
-  { id: 'methoden', titel: 'Methoden' },
-  { id: 'testen', titel: 'Testen' }
+  { id: 'attribute', titel: 'Attribute', stufen: 2 },
+  { id: 'konstruktor', titel: 'Konstruktor', stufen: 2 },
+  { id: 'methoden', titel: 'Methoden', stufen: 2 }
 ];
-var WORTE = {
-  Huerde: { jede: 'jeder Hürde', jedeNeu: 'jeder neuen Hürde', zwei: 'zwei Hürden', eine: 'eine Hürde' },
-  Tunnel: { jede: 'jedem Tunnel', jedeNeu: 'jedem neuen Tunnel', zwei: 'zwei Tunnel', eine: 'einen Tunnel' },
-  Slalom: { jede: 'jedem Slalom', jedeNeu: 'jedem neuen Slalom', zwei: 'zwei Slaloms', eine: 'einen Slalom' }
-};
+var PROBLEME = [
+  { id: 'p_fragt', titel: 'Greenfoot fragt beim Erzeugen nach nichts oder nach anderen Werten als gedacht.' },
+  { id: 'p_null', titel: 'Im Inspektor steht 0 oder false, obwohl ihr beim Erzeugen einen Wert eingegeben habt.' },
+  { id: 'p_eingabe', titel: 'Greenfoot meldet einen Fehler, wenn ihr beim Erzeugen einen Wert eingebt.', nur: ['Tunnel', 'Slalom'] }
+];
 var ERSTES_ATTRIBUT = { Huerde: 'private int hoehe;', Tunnel: 'private int laenge;', Slalom: 'private String bezeichnung;' };
+var PARAMETER_BSP = { Huerde: ['hoehe', 'pHoehe', 'int'], Tunnel: ['laenge', 'pLaenge', 'int'], Slalom: ['anzahlStangen', 'pAnzahlStangen', 'int'] };
 var METHODEN_H2 = {
-  Huerde: 'Eine Zahl wird größer: <code>hoehe = hoehe + 10;</code><br>Ein Wahrheitswert wird gesetzt: <code>abgeworfen = true;</code><br>Jede Methode beginnt mit <code>public void</code>, zum Beispiel <code>public void abwerfen()</code>.',
-  Tunnel: 'Eine Zahl wird größer: <code>durchlaeufe = durchlaeufe + 1;</code><br>Ein Wahrheitswert wird gesetzt: <code>gebogen = true;</code><br>Jede Methode beginnt mit <code>public void</code>, zum Beispiel <code>public void biegen()</code>.',
-  Slalom: 'Eine Zahl wird größer: <code>anzahlStangen = anzahlStangen + 1;</code><br>Die Methode <code>abstandEinstellen</code> bekommt – wie <code>laufen(int pSchritte)</code> bei <code>Hund</code> – einen Parameter: <code>public void abstandEinstellen(int pAbstand)</code>. Darin steht <code>abstand = pAbstand;</code>'
+  Huerde: 'Eine Zahl wird größer: <code>hoehe = hoehe + 10;</code><br>Ein Wahrheitswert wird gesetzt: <code>abgeworfen = true;</code>',
+  Tunnel: 'Eine Zahl wird größer: <code>durchlaeufe = durchlaeufe + 1;</code><br>Ein Wahrheitswert wird gesetzt: <code>gebogen = true;</code>',
+  Slalom: 'Eine Zahl wird größer: <code>anzahlStangen = anzahlStangen + 1;</code><br><code>abstandEinstellen</code> bekommt einen Parameter – wie <code>laufen(int pSchritte)</code> bei <code>Hund</code>: <code>public void abstandEinstellen(int pAbstand)</code>, darin <code>abstand = pAbstand;</code>'
 };
 function hilfeText(klasse, bild, thema, stufe) {
-  var w = WORTE[klasse];
+  var pb = PARAMETER_BSP[klasse];
   var t = {
-    anlegen: [
-      'Klickt im Klassenfenster rechts mit der rechten Maustaste auf <code>Actor</code> – nicht auf <code>Hund</code> – und wählt „Neue Unterklasse …“.',
-      'Der Name heißt genau <code>' + klasse + '</code>: großer Anfangsbuchstabe, ohne Umlaut. Wählt bei den Szenariobildern <code>' + bild + '</code> und klickt auf OK.<br>Steht in eurer Klasse oben <code>extends Hund</code>? Dann Rechtsklick auf die Klasse → Entfernen und neu anlegen.'
-    ],
     attribute: [
-      'Schaut in die Klasse <code>Hund</code>: Wo stehen dort die Attribute, und woraus besteht jede Zeile?',
-      'Aus dem Klassendiagramm: Text → <code>String</code>, Zahl → <code>int</code>, Wahrheitswert → <code>boolean</code>.<br>Das erste Attribut eurer Klasse lautet: <code>' + ERSTES_ATTRIBUT[klasse] + '</code>'
-    ],
-    entscheidung: [
-      'Lest die Beschreibung der Trainerin noch einmal. Welche Werte sind bei ' + w.jede + ' anders? Welche sind bei ' + w.jedeNeu + ' gleich?',
-      'Was bei jedem Objekt anders ist, kommt als Parameter in die Klammer des Konstruktors – wie <code>pName</code> bei <code>Hund</code>.<br>Was bei allen neuen Objekten gleich ist, bekommt im Konstruktor einen festen Wert – wie <code>haltung = "steht";</code>'
+      'Die Datentypen aus dem Klassendiagramm heißen in Java: Text → <code>String</code>, Zahl → <code>int</code>, Wahrheitswert → <code>boolean</code>.',
+      'Jedes Attribut steht in einer eigenen Zeile: <code>private</code>, Datentyp, Name, Semikolon. Euer erstes Attribut: <code>' + ERSTES_ATTRIBUT[klasse] + '</code>'
     ],
     konstruktor: [
-      'Vergleicht mit dem Konstruktor von <code>Hund</code>: Wie heißt er? Was steht in der runden Klammer? Was steht zwischen <code>{</code> und <code>}</code>?',
-      'So ist er aufgebaut: <code>public ' + klasse + '(Datentyp pName, …)</code> – ohne <code>void</code>. In der Klammer steht für jeden Parameter der Datentyp und der Name mit p davor.<br>Zwischen <code>{ }</code> bekommt jedes Attribut einen Startwert: <code>attribut = pParameter;</code> oder <code>attribut = fester Wert;</code>'
+      'Was bei jedem Objekt anders ist, kommt als Parameter in die runde Klammer – wie <code>pName</code> bei <code>Hund</code>. Was bei jedem neuen Objekt gleich ist, bekommt einen festen Wert – wie <code>haltung = "steht";</code>',
+      'Aufbau: <code>public ' + klasse + '(Datentyp pName, …)</code> – ohne <code>void</code>. Zwischen <code>{ }</code> bekommt jedes Attribut einen Startwert: <code>attribut = pParameter;</code> oder <code>attribut = fester Wert;</code>'
     ],
     methoden: [
-      'Schaut euch <code>sitzen()</code> in der Klasse <code>Hund</code> an: Welches Attribut verändert die Methode, und wie?',
+      'Eine Methode verändert ein Attribut mit einer Zuweisung: links das Attribut, rechts der neue Wert – wie <code>haltung = "sitzt";</code> in <code>sitzen()</code>.',
       METHODEN_H2[klasse]
     ],
-    testen: [
-      'Übersetzt. Klickt dann mit der rechten Maustaste auf eure Klasse und wählt <code>new ' + klasse + '(…)</code>. Fragt Greenfoot genau nach den Werten, die bei ' + w.jede + ' anders sind?',
-      'Setzt ' + w.zwei + ' auf den Platz. Rechtsklick auf ' + w.eine + ' → Methode aufrufen, dann Rechtsklick → Inspizieren.<br>Steht ein Attribut auf 0 oder <code>false</code>, obwohl ihr beim Erzeugen einen Wert eingegeben habt? Dann fehlt im Konstruktor eine Zeile wie <code>attribut = pParameter;</code>'
+    p_fragt: [
+      'Steht vor dem Konstruktor <code>void</code>? Dann ist er eine Methode, und Greenfoot fragt beim Erzeugen nichts ab. Fragt Greenfoot nach anderen Werten, prüft die Parameter in der runden Klammer des Konstruktors.'
+    ],
+    p_null: [
+      'Meist fehlt im Konstruktor die Zuweisung an das Attribut, zum Beispiel <code>' + pb[0] + ' = ' + pb[1] + ';</code><br>Steht dort <code>' + pb[2] + ' ' + pb[0] + ' = ' + pb[1] + ';</code>, entsteht eine neue Variable, und das Attribut bekommt keinen Wert. Das passiert auch, wenn der Parameter genauso heißt wie das Attribut.'
+    ],
+    p_eingabe: [
+      klasse === 'Slalom'
+        ? 'Text muss in Anführungszeichen stehen, zum Beispiel <code>"Slalom A"</code>.'
+        : 'Ein Wahrheitswert wird als <code>true</code> oder <code>false</code> eingegeben, nicht als „ja“ oder „gebogen“.'
     ]
   };
   return t[thema][stufe - 1];
@@ -398,23 +397,26 @@ function schuelerApp() {
       h += '</div>';
     }
 
-    // Hilfen und Hochladen nur während der Arbeitsphase
-    if (p.klasse && !z.freigabe.download) {
+    // Hilfen und Hochladen während und nach der Arbeitsphase (Überarbeitung in der Gruppe)
+    if (p.klasse) {
       h += hilfenKarte(p);
       h += '<div class="card"><h2>Quelltext hochladen</h2>';
-      if (!z.freigabe.abgabe) {
+      var offen = z.freigabe.abgabe || z.freigabe.download;
+      if (!offen) {
         h += '<p class="muted">Das Hochladen ist noch nicht freigegeben.</p>';
       } else {
-        h += '<p class="small muted">Erst hochladen, wenn eure Klasse in Greenfoot ohne Fehlermeldung übersetzt. Ihr könnt jederzeit eine neue Fassung hochladen, bis die Arbeitsphase endet.</p>' +
+        h += '<p class="small muted">Ladet euren Quelltext hoch, auch wenn er noch nicht fertig ist oder Greenfoot Fehler meldet. Ihr könnt jederzeit eine neue Fassung hochladen.' +
+          (z.freigabe.download ? ' Eine neue Fassung ist erst im Gruppenszenario, wenn es neu heruntergeladen wird.' : '') + '</p>' +
           (p.abgegeben ? '<p class="okbox">Hochgeladen um ' + uhr(p.codeZeit) + ' Uhr.</p>' : '');
       }
-      h += '<div class="btns"><button class="btn ' + (p.abgegeben ? '' : 'primary') + '" id="hochladen"' + (z.freigabe.abgabe ? '' : ' disabled') + '>' + (p.abgegeben ? 'Neue Fassung hochladen' : 'Quelltext hochladen') + '</button></div></div>';
+      h += '<div class="btns"><button class="btn ' + (p.abgegeben ? '' : 'primary') + '" id="hochladen"' + (offen ? '' : ' disabled') + '>' + (p.abgegeben ? 'Neue Fassung hochladen' : 'Quelltext hochladen') + '</button></div></div>';
     }
     return h;
   }
 
   function hilfenKarte(p) {
     var k = klasseInfo(z, p.klasse);
+    var bild = k ? k.bild : '';
     var stand = p.hilfen || {};
     var h = '<div class="card"><h2>Hilfen</h2><p class="small muted">Erst selbst überlegen, dann Hilfe 1. Hilfe 2 gibt es erst, wenn ihr Hilfe 1 gelesen habt.</p>';
     h += THEMEN.map(function (t) {
@@ -422,10 +424,17 @@ function schuelerApp() {
       return '<div class="hilfe"><div class="kopf"><b>' + esc(t.titel) + '</b>' +
         '<button class="mini" data-hilfe="' + t.id + '" data-stufe="1"' + (st >= 1 ? ' disabled' : '') + '>Hilfe 1</button>' +
         '<button class="mini" data-hilfe="' + t.id + '" data-stufe="2"' + (st >= 1 && st < 2 ? '' : ' disabled') + '>Hilfe 2</button></div>' +
-        (st >= 1 ? '<div class="txt">' + hilfeText(p.klasse, k ? k.bild : '', t.id, 1) + '</div>' : '') +
-        (st >= 2 ? '<div class="txt h2">' + hilfeText(p.klasse, k ? k.bild : '', t.id, 2) + '</div>' : '') + '</div>';
+        (st >= 1 ? '<div class="txt">' + hilfeText(p.klasse, bild, t.id, 1) + '</div>' : '') +
+        (st >= 2 ? '<div class="txt h2">' + hilfeText(p.klasse, bild, t.id, 2) + '</div>' : '') + '</div>';
     }).join('');
-    h += '<details class="fm"><summary>Fehlermeldungen in Greenfoot</summary><table class="fmtab">' +
+    h += '<h3 style="margin:16px 0 4px;font-size:1em">Es klappt nicht?</h3>';
+    h += PROBLEME.filter(function (t) { return !t.nur || t.nur.indexOf(p.klasse) >= 0; }).map(function (t) {
+      var st = stand[t.id] || 0;
+      return '<div class="hilfe"><div class="kopf"><span>' + esc(t.titel) + '</span>' +
+        '<button class="mini" data-hilfe="' + t.id + '" data-stufe="1"' + (st >= 1 ? ' disabled' : '') + '>Hilfe</button></div>' +
+        (st >= 1 ? '<div class="txt">' + hilfeText(p.klasse, bild, t.id, 1) + '</div>' : '') + '</div>';
+    }).join('');
+    h += '<details class="fm"><summary>Fehlermeldungen beim Übersetzen</summary><table class="fmtab">' +
       FEHLERMELDUNGEN.map(function (f) { return '<tr><td>' + esc(f[0]) + '</td><td>' + f[1] + '</td></tr>'; }).join('') + '</table></details></div>';
     return h;
   }

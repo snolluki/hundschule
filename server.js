@@ -36,9 +36,9 @@ const MAX_CODE = 20000;
 const KLASSEN = [
   { name: 'Huerde', anzeige: 'Hürde', bild: 'huerde.png', info: '2 Attribute · 4 Methoden' },
   { name: 'Tunnel', anzeige: 'Tunnel', bild: 'tunnel.png', info: '3 Attribute · 3 Methoden' },
-  { name: 'Slalom', anzeige: 'Slalom', bild: 'slalom.png', info: '3 Attribute · 1 Methode mit Parameter' },
+  { name: 'Slalom', anzeige: 'Slalom', bild: 'slalom.png', info: '3 Attribute · 3 Methoden, eine mit Parameter' },
 ];
-const HILFE_THEMEN = ['anlegen', 'attribute', 'entscheidung', 'konstruktor', 'methoden', 'testen'];
+const HILFE_THEMEN = ['attribute', 'konstruktor', 'methoden', 'p_fragt', 'p_null', 'p_eingabe'];
 const KLASSE = Object.fromEntries(KLASSEN.map(k => [k.name, k]));
 
 const app = express();
@@ -126,25 +126,32 @@ function namenPruefen(liste) {
 
 function codePruefen(quelltext, klasse) {
   const q = String(quelltext || '').replace(/\r\n?/g, '\n');
+  // Nur ein leeres oder viel zu langes Feld wird abgelehnt. Alles andere wird angenommen,
+  // auch unfertige oder nicht übersetzbare Klassen: Die Gruppe überarbeitet sie gemeinsam.
   if (!q.trim()) return { fehler: 'Das Feld ist leer. Kopiert euren Quelltext mit Strg + A und Strg + C aus dem Greenfoot-Editor.' };
   if (q.length > MAX_CODE) return { fehler: 'Der Text ist zu lang. Habt ihr nur den Quelltext eurer Klasse kopiert?' };
+  const code = /import\s+greenfoot/.test(q) ? q : 'import greenfoot.*;\n\n' + q;
+  const hinweise = [];
   const m = q.match(/public\s+class\s+([^\s{]+)\s+extends\s+(\w+)/);
-  if (!m) return { fehler: 'Ich finde keine Zeile wie „public class … extends Actor“. Habt ihr den ganzen Quelltext kopiert (Strg + A)?' };
-  if (m[2] !== 'Actor') return { fehler: `Eure Klasse soll von Actor erben („extends Actor“), nicht von ${m[2]}.` };
-  if (m[1] !== klasse) {
-    const umlaut = /[äöüÄÖÜß]/.test(m[1]) ? ' Bezeichner schreiben wir ohne Umlaute.' : '';
-    return { fehler: `Eure Klasse heißt „${m[1]}“, sie soll aber „${klasse}“ heißen.${umlaut}` };
+  if (!m) {
+    hinweise.push('Ich finde keine Zeile wie „public class ' + klasse + ' extends Actor“. Habt ihr den ganzen Quelltext kopiert (Strg + A)?');
+  } else {
+    if (m[2] !== 'Actor') hinweise.push(`Eure Klasse erbt von ${m[2]}, sie soll aber von Actor erben („extends Actor“).`);
+    if (m[1] !== klasse) {
+      const umlaut = /[äöüÄÖÜß]/.test(m[1]) ? ' Bezeichner schreiben wir ohne Umlaute.' : '';
+      hinweise.push(`Eure Klasse heißt „${m[1]}“, sie soll aber „${klasse}“ heißen.${umlaut}`);
+    }
   }
   const auf = (q.match(/{/g) || []).length, zu = (q.match(/}/g) || []).length;
-  if (auf !== zu) return { fehler: `Es gibt ${auf} öffnende und ${zu} schließende geschweifte Klammern. Übersetzt in Greenfoot und gebt erst ab, wenn keine Fehlermeldung kommt.` };
-  const code = /import\s+greenfoot/.test(q) ? q : 'import greenfoot.*;\n\n' + q;
-  // Hinweise, die das Hochladen nicht verhindern (der Quelltext übersetzt trotzdem)
-  let hinweis = '';
+  if (auf !== zu) hinweise.push(`Es gibt ${auf} öffnende und ${zu} schließende geschweifte Klammern.`);
   if (new RegExp('void\\s+' + klasse + '\\s*\\(').test(q)) {
-    hinweis = `Vor „${klasse}(…)“ steht void. Dann ist es eine Methode und kein Konstruktor: Greenfoot fragt beim Erzeugen nichts ab. Beim Konstruktor steht vor dem Namen kein void.`;
+    hinweise.push(`Vor „${klasse}(…)“ steht void. Dann ist es eine Methode und kein Konstruktor: Greenfoot fragt beim Erzeugen nichts ab. Beim Konstruktor steht vor dem Namen kein void.`);
   } else if (!new RegExp('public\\s+' + klasse + '\\s*\\(').test(q)) {
-    hinweis = `Ich finde keinen Konstruktor „public ${klasse}(…)“. Er fehlt noch – ladet später noch einmal hoch, wenn er fertig ist.`;
+    hinweise.push(`Ich finde keinen Konstruktor „public ${klasse}(…)“.`);
   }
+  const hinweis = hinweise.length
+    ? hinweise.join(' ') + ' Ihr könnt weiterarbeiten und eine neue Fassung hochladen.'
+    : '';
   return { code, hinweis };
 }
 
@@ -365,8 +372,8 @@ function schuelerAktion(socket, typ, d) {
     }
     case 'abgeben': {
       if (!p) return { fehler: 'Tragt euch zuerst als Paar ein.' };
-      if (Z.freigabe.download) return { fehler: 'Die Arbeitsphase ist beendet. Hochladen geht nicht mehr.' };
-      if (!Z.freigabe.abgabe) return { fehler: 'Das Hochladen ist noch nicht freigegeben.' };
+      // Hochladen bleibt auch nach dem Ende der Arbeitsphase möglich
+      if (!Z.freigabe.abgabe && !Z.freigabe.download) return { fehler: 'Das Hochladen ist noch nicht freigegeben.' };
       if (!p.klasse) return { fehler: 'Wählt zuerst euer Hindernis.' };
       const r = codePruefen(d && d.quelltext, p.klasse);
       if (r.fehler) return { fehler: r.fehler };
@@ -421,7 +428,7 @@ function lehrerAktion(d) {
       Z.abgabeBis = text(d.zeit, 10);
       return null;
     case 'arbeitsphaseBeenden':
-      Z.freigabe.wahl = false; Z.freigabe.abgabe = false; Z.freigabe.download = true;
+      Z.freigabe.wahl = false; Z.freigabe.abgabe = true; Z.freigabe.download = true;
       return null;
     case 'rollenTauschen':
       rollenTauschen();
